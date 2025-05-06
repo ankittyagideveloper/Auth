@@ -3,6 +3,7 @@ import crypto from "crypto";
 import nodemailer from "nodemailer";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { ObjectId } from "mongodb";
 
 const registerUser = async (req, res) => {
   //get data
@@ -134,7 +135,7 @@ const loginUser = async (req, res) => {
       });
     }
     const isMatched = await bcrypt.compare(password, user.password);
-
+    console.log("isMatched", isMatched);
     if (!isMatched) {
       return res.status(400).json({
         message: "Invalid email or password3",
@@ -147,10 +148,14 @@ const loginUser = async (req, res) => {
       });
     }
 
-    const token = jwt.sign({ id: user._id }, "shhhhh", {
-      expiresIn: "24h",
-    });
-
+    console.log("hello", process.env.JWT_SECRET, user._id);
+    const token = jwt.sign(
+      { id: user._id.toString() },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: "24h",
+      }
+    );
     const cookieOptions = {
       httpOnly: true,
       secure: true,
@@ -172,8 +177,86 @@ const loginUser = async (req, res) => {
   } catch (error) {
     return res.status(400).json({
       message: "Invalid email or password5",
+      error,
     });
   }
 };
 
-export { registerUser, verifyUser, loginUser };
+const getMe = async (req, res) => {
+  try {
+    const decoded = req.user;
+    if (!decoded || !decoded.id) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    console.log("reached at profile level", decoded.id);
+
+    const user = await User.findById(decoded.id).select("-password");
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json({
+      success: true,
+      user,
+    });
+  } catch (error) {
+    console.error("Error fetching user profile:", error);
+    if (!res.headersSent) {
+      return res.status(500).json({ message: "Something went wrong!" });
+    }
+  }
+};
+
+const logoutUser = async (req, res) => {
+  try {
+    res.cookie("token", "", {
+      expiresIn: new Date(0),
+    });
+    res.status(200).json({
+      success: true,
+      message: "Logged out successfully!!",
+    });
+  } catch (error) {}
+};
+
+const forgotPassword = async (req, res) => {
+  try {
+    //get email
+    //fide user based on email
+    //resetPassword Token,
+    //resetPassword expires ==>Date.now()+10 *60*60
+    //user.save()
+    //send email with route
+  } catch (error) {}
+};
+const resetPassword = async (req, res) => {
+  try {
+    //collect token from params
+    //password from req.body
+    const { token } = req.params;
+    const { password } = req.body;
+
+    try {
+      const user = await User.findOne({
+        resetPasswordToke: token,
+        resetPasswordExpires: {
+          $gt: Date.now(),
+        },
+      });
+
+      //set password in user
+      //resetToke,resetExpirt ==>reset
+      //save
+    } catch (error) {}
+  } catch (error) {}
+};
+export {
+  registerUser,
+  verifyUser,
+  loginUser,
+  getMe,
+  logoutUser,
+  resetPassword,
+  forgotPassword,
+};
